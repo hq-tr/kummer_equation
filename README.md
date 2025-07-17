@@ -45,7 +45,7 @@ Other optional parameters include:
 	--E_max: upper bound for the range of energy in which the eigenvalues are searched (default value = 10)
 
 After completion:
-- A .dat file will be generated in the subdirectory "energies". The left collumn is the energy and right collumn is the corresponding L_z sector
+- A `.dat` file will be generated in the subdirectory `energies/`. The left collumn is the energy and right collumn is the corresponding $L_z$ sector
 
 ### Plotting the spectrum
 There is another script that can be used for plotting the spectrum:
