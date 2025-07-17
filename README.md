@@ -3,8 +3,9 @@
 ## DESCRIPTION
 The routines in this directory is for calculating the spectrum of a system with two concentric region of magnetic field.
 
-Region 1 (Droplet): $r < R_0$, magnetic field $B_1$
-Region 2 (Annular): $r \geq R_0$, magnetic field $B_0$
+- Region 1 (Droplet): $r < R_0$, magnetic field $B_1$
+
+- Region 2 (Annular): $r \geq R_0$, magnetic field $B_0$
 
 Using symmetric gauge, the resulting Schrodinger's Equation can be simplified (in the radial component) to the Kummer Equation (also known as Confluent Hypergeometric Equation.) The general solutions are the Confluent Hypergeometric Functions of the First Kind (aka Kummer function) and the Second Kind (aka Tricomi function).
 
