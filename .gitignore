@@ -1,4 +1,4 @@
 plots/*
 energies/*
-hypergeomfunctions
-__pycache__
+hypergeomfunctions/*
+__pycache__/*

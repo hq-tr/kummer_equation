@@ -6,6 +6,7 @@ from scipy.optimize import fsolve
 from argparse import ArgumentParser
 from lib2Bspec import wronskian as wk2
 from itertools import product
+import time
 
 def wk(E, m, l1, l2, r0):
     x1 = r0**2/(2*l1**2)
@@ -25,11 +26,13 @@ def wk(E, m, l1, l2, r0):
     dwf2 = ((1/2)*(-1+2*abs(mu)/x2)*sc.hyperu(a2, b2, x2)- a2*sc.hyperu(a2+1, b2+1, x2)) / l2**2
     return wf1*dwf2 - wf2*dwf1
 
-def weighted_binary_search_interval(f,endpoints, tol=1e-20, max_iter=100000):
+def weighted_binary_search_interval(f,endpoints, tol=1e-14, max_iter=50000):
+	st = time.time()
 	fmin = f(endpoints[0])
 	fmax = f(endpoints[1])
 	if np.sign(fmin) * np.sign(fmax) > 0:
 		print("WARNING: function evaluated at endpoints have the same sign! Terminating.")
+		print(f"{time.time()-st} seconds")
 		return float("nan")
 	else:
 		currentmin = endpoints[0]
@@ -41,6 +44,7 @@ def weighted_binary_search_interval(f,endpoints, tol=1e-20, max_iter=100000):
 			confidence = currentmax - currentmin
 			if confidence < tol:
 				print(f"Convergence after {i} iterations. Confidence range = {currentmax - currentmin}")
+				print(f"{time.time()-st} seconds")
 				return 0.5*(currentmax+currentmin)
 			elif np.sign(fmin) * np.sign(fret) <= 0:
 				currentmax = ret
@@ -50,13 +54,14 @@ def weighted_binary_search_interval(f,endpoints, tol=1e-20, max_iter=100000):
 				fmin = fret
 			if i == max_iter-1:
 				print(f"WARNING: Max iteration number reached. Confidence range = {currentmax - currentmin}")
+				print(f"{time.time()-st} seconds")
 				return 0.5*(currentmax+currentmin)
 
-def weighted_binary_search(f,xmin,xmax,resolution):
+def weighted_binary_search(f,xmin,xmax,resolution,tol=1e-14,max_iter=50000):
 	test_array = np.arange(xmin,xmax,resolution)
 	test_signs = np.sign(np.array(list(map(f, test_array))))
 	intervals  = [[test_array[i], test_array[i+1]] for i in range(len(test_array)-1) if test_signs[i]*test_signs[i+1] <= 0]
-	return [weighted_binary_search_interval(f,interval) for interval in intervals] 
+	return [weighted_binary_search_interval(f,interval,tol,max_iter) for interval in intervals] 
 
 
 if __name__ == "__main__":
@@ -68,6 +73,8 @@ if __name__ == "__main__":
 	ap.add_argument("--E_max", type=float, default=10.0, help="maximum energy to solve for")
 	ap.add_argument("--m_min", type=int, default=-6, help="minimum angular momentum quantum number m")
 	ap.add_argument("--m_max", type=int, default=60, help="maximum angular momentum quantum number m")
+	ap.add_argument("--tolerance", type=float,default=1e-14, help="tolerance for the energy eigenvalues")
+	ap.add_argument("--max_iteration", type=int, default=50000, help="maximum iteration for each energy eigenvalue calculation")
 
 	aa = ap.parse_args()
 
@@ -96,10 +103,10 @@ if __name__ == "__main__":
 			print(f"m={m} -----------------")
 			#f = lambda E: np.exp(-E)/R_0*wk2(E,m,l_1,l_2,R_0)
 			f = lambda E: wk(E,m,l_1,l_2,R_0)
-			E = weighted_binary_search(f,Emin,Emax,delE)
+			E = weighted_binary_search(f,Emin,Emax,delE,tol=aa.tolerance,max_iter=aa.max_iteration)
 			#E = fsolve(f, np.linspace(0,10,30))
 			#E = E[E>=0]
-			plt.plot(m*np.ones(len(E)),E,"k_")
+			#plt.plot(m*np.ones(len(E)),E,"k_")
 			El.append(E)
 			ml.append(m)
 

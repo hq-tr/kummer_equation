@@ -55,8 +55,9 @@ def psi(r,a1,b1,a2,b2,l1,l2,m,mu,ratio):
 		#return 10**(-m) * ratio * hypU(a2,b2,r**2/(2*aa.l_2**2)) * r**abs(mu) * np.exp(-r**2 / (4*aa.l_2**2))
 
 if __name__ == "__main__":
-	fig,ax = plt.subplots(figsize=(6,4.5))
+	fig,ax = plt.subplots(figsize=(8,4.5))
 	ax.tick_params(axis="y",direction="in", left="off",labelleft="on")
+	ax.tick_params(axis="x",direction="in", left="off",labelleft="on")
 	E_all,m_all = read_spectrum(aa.B_0, flux, r0)
 	for m in aa.m:
 		print(f"--- m = {m}")
@@ -72,23 +73,26 @@ if __name__ == "__main__":
 			print(f"No {aa.n}-level energy at m = {m}.")
 			continue
 
-		a1 = -E/aa.B_0 - m/2 + abs(m/2) + 1/2
+		a1 = -E*(l1**2) - m/2 + abs(m/2) + 1/2
 		b1 = 1 + abs(m)
 
+		#mu = m/2 - ((r0**2)/4)*((1/l1**2) - (1/l2**2))
 		mu = m/2 - ((r0**2)/4)*((1/l1**2) - (1/l2**2))
-		a2 = -E/abs(B_1) - mu + abs(mu) + 1/2
+		a2 = -E*(l2**2) - mu + abs(mu) + 1/2
 		b2 = 1 + 2*abs(mu)
 
-		dr = 0.002
+		ddr = 0.000001
 
 		# There are two ratios: ratio between the values and ratio between the first derivatives. 
 		# Ideally, these two ratio must be the same. We calculate both for sanity check.
 		ratio = psiL(aa.R_0,a1,b1,l1,m) / psiR(aa.R_0,a2,b2,l2,mu)
-		ratio2 = (psiL(aa.R_0,a1,b1,l1,m) - psiL(aa.R_0-dr,a1,b1,l1,m)) / (psiR(aa.R_0+dr,a2,b2,l2,mu)- psiR(aa.R_0,a2,b2,l2,mu))
+		ratio2 = (psiL(aa.R_0,a1,b1,l1,m) - psiL(aa.R_0-ddr,a1,b1,l1,m)) / (psiR(aa.R_0+ddr,a2,b2,l2,mu)- psiR(aa.R_0,a2,b2,l2,mu))
 		print(f"ratios: {ratio:.6f}\t{ratio2:.6f}")
 
-		r_list = np.arange(0,aa.r_max, dr)
+		#r_list = np.arange(0,aa.r_max, dr)
+		r_list = np.concatenate((np.linspace(0,r0,10000,endpoint=False), np.linspace(r0,r0+1,10000),np.linspace(r0+1,aa.r_max,8000)))
 		p_list = np.array([psi(r,a1,b1,a2,b2,l1,l2,m,mu,ratio) for r in r_list])
+		dr     = r_list[1:] - r_list[:-1]
 
 		#p_list = np.array([psiL(r,a1,b1) for r in r_list])
 
@@ -101,11 +105,11 @@ if __name__ == "__main__":
 
 		plt.plot(r_list,p_list,label=f"m = {m}, E = {E:.5f}")
 
-	plt.xlabel("r")
-	plt.ylabel(r"$\psi(r,\phi=0)$")
+	plt.xlabel("r",fontsize=14)
+	plt.ylabel(r"$\psi(r,\phi=0)$",fontsize=14)
 	plt.legend()
 	#plt.ylim([-1e-12,1e-10])
-	plt.title(f"n={aa.n} level wavefunctions, $B_0$={aa.B_0}, $\Phi$={aa.flux}, $R_0$={aa.R_0}")
+	plt.title(f"n={aa.n} level wavefunctions, $B_0$={aa.B_0}, $\Phi$={aa.flux}, $R_0$={aa.R_0}",fontsize=14)
 	if os.environ.get('DISPLAY', '') == '':
 		plt.savefig(f"plots/wf_B0_{aa.B_0}_flux_{flux:.4f}_R0_{aa.R_0:.4f}_n_{aa.n}.svg")
 	else:

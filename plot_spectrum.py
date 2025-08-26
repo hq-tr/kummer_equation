@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
 #from itertools import groupby
 from argparse import ArgumentParser
-from lib2Bspec import wronskian as wk2
+from lib2Bspec import read_spectrum
 from itertools import product
 
 
@@ -31,16 +31,13 @@ if __name__ == "__main__":
 
 		fig,ax = plt.subplots(figsize=(6,4.5))
 		ax.tick_params(axis="y",direction="in", left="off",labelleft="on")
-		with open(f"energies/eigen_B_0_{aa.B_0}_flux_{flux:.4f}_R0_{R_0:.4f}.dat") as f:
-			data = [list(map(float,x.split())) for x in f.readlines()]
-			E = [x[0] for x in data]
-			m = [x[1] for x in data]
-			plt.plot(m,E,"k_")
+		E,m = read_spectrum(aa.B_0,flux,R_0)
+		plt.plot(m[E<=aa.E_max],E[E<=aa.E_max],"k_")
 		fig.tight_layout
 		plt.xticks(fontsize=14)
 		plt.yticks(fontsize=14)
 		plt.xlabel("m",fontsize=14)
 		plt.ylabel("E",fontsize=14)
-		plt.title(f"B_0 = {aa.B_0}, flux = {flux}, R_0 = {R_0}",fontsize=16)
+		plt.title(f"B_0 = {aa.B_0}, flux = {flux/(2*np.pi):.2f}h/e, R_0 = {R_0}",fontsize=16)
 		plt.savefig(f"plots/spectrum_B0_{aa.B_0}_flux_{flux:.4f}_R0_{R_0:.4f}.svg")
 		print("=====================================")

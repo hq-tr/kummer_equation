@@ -21,6 +21,40 @@ import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
 from itertools import groupby
 
+
+# Read spectrum from data file
+def read_spectrum(B0,flux,R0):
+    try:
+        with open(f"energies/eigen_B_0_{B0}_flux_{flux:.4f}_R0_{R0:.4f}.dat") as f:
+            data = [list(map(float,x.split())) for x in f.readlines()]
+            E = np.array([x[0] for x in data])
+            m = np.array([x[1] for x in data])
+    except FileNotFoundError:
+        print(f"Spectrum data not found for B0={B0}, flux={flux}, R0={R0}")
+        E = []
+        m = []
+
+    return E,m
+
+# The continuity condition is described by the Wronskian.
+def wk(E, m, l1, l2, r0):
+    x1 = r0**2/(2*l1**2)
+    x2 = r0**2/(2*l2**2)
+    
+    a1 = -E*(l1**2) - m/2 + abs(m/2) + 1/2
+    b1 = 1 + abs(m)
+    wf1  = sc.hyp1f1(a1, b1, x1) #* x1**(abs(m)/2)
+    #dwf1 = ((-x1**(abs(m)/2)+abs(m)*x1**(abs(m)/2-1))*sc.hyp1f1(a1, b1, x1) + x1**(abs(m)/2)*(a1/b1)*sc.hyp1f1(a1+1, b1+1, x1)) * (r0/l1**2)
+    dwf1 = ((1/2)*(-1+abs(m)/x1)*sc.hyp1f1(a1, b1, x1) +(1/b1)*a1*sc.hyp1f1(a1+1, b1+1, x1)) / l1**2
+    
+    mu = m/2 - ((r0**2)/4)*((1/l1**2) - (1/l2**2))
+    a2 = -E*(l2**2) - mu + abs(mu) + 1/2
+    b2 = 1 + 2*abs(mu)
+    wf2  = sc.hyperu(a2, b2, x2) #* x2**(abs(mu))
+    #dwf2 = ((-x2**(abs(mu))+2*abs(mu)*x2**(abs(mu))-1)*sc.hyperu(a2, b2, x2) - x2**(abs(mu))*a2*sc.hyperu(a2+1, b2+1, x2)) * (r0/l2**2)
+    dwf2 = ((1/2)*(-1+2*abs(mu)/x2)*sc.hyperu(a2, b2, x2)- a2*sc.hyperu(a2+1, b2+1, x2)) / l2**2
+    return wf1*dwf2 - wf2*dwf1
+
 # To flatten the list
 def flatten(xss):
     return [x for xs in xss for x in xs]
@@ -31,7 +65,9 @@ def nearby_groups(arr, tol_digits=6):
         yield sorted(grp, key=lambda x: abs(round(x) - x))[0] # yield value from group that is closest to an integer
 
 
-# The continuity condition is described by the Wronskian
+# The continuity condition is described by the Wronskian.
+# This is the wronskian in the original code, which is missing the factor of 1/l^2 in the derivative.
+# This is left here for legacy purpose.
 def wronskian(E, m, l1, l2, r0):
     x1 = r0**2/(2*l1**2)
     x2 = r0**2/(2*l2**2)
