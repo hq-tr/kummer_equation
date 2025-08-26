@@ -1,10 +1,11 @@
 import numpy as np
+import os
 from scipy import special
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
 #from itertools import groupby
 from argparse import ArgumentParser
-from lib2Bspec import wronskian as wk2
+from lib2Bspec import read_spectrum
 from itertools import product
 
 ap = ArgumentParser()
@@ -16,6 +17,7 @@ ap.add_argument("--R_0", type=float, help="Radius of the domain wall")
 ap.add_argument("--n", "-n", type=int, default=0, help="\"Landau level\" index to plot the wavefunction of")
 ap.add_argument("--m", "-m", type=int, nargs ="+", help="L_z quantum number(s). Can input mulitple values.")
 ap.add_argument("--r_max", type=float, default=10, help="Maximum r to plot")
+ap.add_argument("--save_figure",action="store_true", help="Use this to save the figure as .svg file in plots/")
 
 aa = ap.parse_args()
 
@@ -25,12 +27,6 @@ B_1 = aa.B_0 + flux / (np.pi * aa.R_0**2)
 l2 = 1/np.sqrt(aa.B_0)
 l1 = 1/np.sqrt(abs(B_1))
 r0 = aa.R_0
-
-try:
-	with open(f"energies/eigen_B_0_{aa.B_0}_flux_{flux:.4f}_R0_{r0:.4f}.dat") as f:
-		data = [list(map(float, x.split())) for x in f.readlines()]
-except FileNotFoundError:
-	print("Eigenvalue file not found.")
 
 
 # aliases for confluent hypergeom functions
@@ -61,9 +57,10 @@ def psi(r,a1,b1,a2,b2,l1,l2,m,mu,ratio):
 if __name__ == "__main__":
 	fig,ax = plt.subplots(figsize=(6,4.5))
 	ax.tick_params(axis="y",direction="in", left="off",labelleft="on")
+	E_all,m_all = read_spectrum(aa.B_0, flux, r0)
 	for m in aa.m:
 		print(f"--- m = {m}")
-		En = [thing[0] for thing in data if thing[1]==m]
+		En = [E_all[i] for i in range(len(m_all)) if m_all[i]==m]
 		energies.append(En)
 
 		try:
@@ -109,4 +106,9 @@ if __name__ == "__main__":
 	plt.legend()
 	#plt.ylim([-1e-12,1e-10])
 	plt.title(f"n={aa.n} level wavefunctions, $B_0$={aa.B_0}, $\Phi$={aa.flux}, $R_0$={aa.R_0}")
-	plt.savefig(f"plots/wf_B0_{aa.B_0}_flux_{flux:.4f}_R0_{aa.R_0:.4f}_n_{aa.n}.svg")
+	if os.environ.get('DISPLAY', '') == '':
+		plt.savefig(f"plots/wf_B0_{aa.B_0}_flux_{flux:.4f}_R0_{aa.R_0:.4f}_n_{aa.n}.svg")
+	else:
+		if aa.save_figure:
+			plt.savefig(f"plots/wf_B0_{aa.B_0}_flux_{flux:.4f}_R0_{aa.R_0:.4f}_n_{aa.n}.svg")
+		plt.show()
