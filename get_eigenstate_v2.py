@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
 		# roughly normalize the wavefunction using rectangle rule
 		#dr     = r_list[1] - r_list[0]
-		norm   = np.sum(0.5*(abs(p_list[:-1])**2 + abs(p_list[1:])**2) * dr)
+		norm   = 2*np.pi*np.sum(0.5*(abs(p_list[:-1])**2 * r_list[:-1] + abs(p_list[1:])**2 * r_list[1:]) * dr)
 		print(f"norm={norm}")
 		p_list /= np.sqrt(norm)
 
