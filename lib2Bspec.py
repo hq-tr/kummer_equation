@@ -20,21 +20,8 @@ import scipy.special as sc
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
 from itertools import groupby
+import time
 
-
-# Read spectrum from data file
-def read_spectrum(B0,flux,R0):
-    try:
-        with open(f"energies/eigen_B_0_{B0}_flux_{flux:.4f}_R0_{R0:.4f}.dat") as f:
-            data = [list(map(float,x.split())) for x in f.readlines()]
-            E = np.array([x[0] for x in data])
-            m = np.array([x[1] for x in data])
-    except FileNotFoundError:
-        print(f"Spectrum data not found for B0={B0}, flux={flux}, R0={R0}")
-        E = []
-        m = []
-
-    return E,m
 
 # The continuity condition is described by the Wronskian.
 def wk(E, m, l1, l2, r0):
@@ -168,3 +155,139 @@ if __name__ == "__main__":
 
     exit()
 
+################################## IMPORTABLE FUNCTIONS ############################################3
+# Read spectrum from data file
+def read_spectrum(B0,flux,R0):
+    try:
+        with open(f"energies/eigen_B_0_{B0}_flux_{flux:.4f}_R0_{R0:.4f}.dat") as f:
+            data = [list(map(float,x.split())) for x in f.readlines()]
+            E = np.array([x[0] for x in data])
+            m = np.array([x[1] for x in data])
+    except FileNotFoundError:
+        print(f"Spectrum data not found for B0={B0}, flux={flux:.4f}, R0={R0:.4f}")
+        E = []
+        m = []
+
+    return E,m
+
+# Calculate the eigenstate given an energy E (already solved from the Wronskian)
+# aliases for confluent hypergeom functions
+hypM = sc.hyp1f1
+hypU = sc.hyperu
+
+# Define the function piece wise (L: r < R_0 , R: r > R_0)
+def psiL(r,a1,b1,l1,m):
+    x1 = r**2/(2*l1**2)
+    return hypM(a1,b1,x1) * x1**(abs(m)/2) * np.exp(-x1/2)
+
+def psiR(r,a2,b2,l2,mu):
+    x2 = r**2/(2*l2**2)
+    return hypU(a2,b2,x2) * x2**(abs(mu)) * np.exp(-x2/2)
+
+# Define the full function with a given ratio. 
+# Ratio is multiplied to the "R" component to ensure the function is continuous.
+def psi(r,r0,a1,b1,a2,b2,l1,l2,m,mu,ratio):
+    if r < 0: 
+        return psiL(0,a1,b1,l1,m)
+    elif r < r0:
+        #return 10**(-m) * hypM(a1,b1,r**2/(2*aa.l_1**2)) * r**m * np.exp(-r**2 / (4*aa.l_1**2))
+        return psiL(r,a1,b1,l1,m)
+    else:
+        return psiR(r,a2,b2,l2,mu) * ratio
+        #return 10**(-m) * ratio * hypU(a2,b2,r**2/(2*aa.l_2**2)) * r**abs(mu) * np.exp(-r**2 / (4*aa.l_2**2))
+
+# Generate a wavefunction (in r) given an energy E
+def eigenstate(E,r0,B0,B1,m):
+    # Calculate the parameters:
+    l2 = 1/np.sqrt(abs(B0))
+    l1 = 1/np.sqrt(abs(B1))
+
+    a1 = -E*(l1**2) - m/2 + abs(m/2) + 1/2
+    b1 = 1 + abs(m)
+
+    mu = m/2 - ((r0**2)/4)*((1/l1**2) - (1/l2**2))
+    a2 = -E*(l2**2) - mu + abs(mu) + 1/2
+    b2 = 1 + 2*abs(mu)
+
+    # Calculate the ratio at r0:
+    ddr = 0.0000000001 
+    # There are two ratios: ratio between the values and ratio between the first derivatives. 
+    # Ideally, these two ratio must be the same. We calculate both for sanity check.
+    ratio = psiL(r0,a1,b1,l1,m) / psiR(r0,a2,b2,l2,mu)
+    ratio2 = (psiL(r0,a1,b1,l1,m) - psiL(r0-ddr,a1,b1,l1,m)) / (psiR(r0+ddr,a2,b2,l2,mu)- psiR(r0,a2,b2,l2,mu))
+    if abs(ratio-ratio2)>0.01:
+        print(f"WARNING: the function may not be both continuous and differentiable at r={r0}")
+        print(f"Check ratio:\t{ratio:.6f}\t{ratio2:.6f}")
+
+    # normalize the wavefunction using rectangle rule
+    #r_list = np.concatenate((np.linspace(0,r0,10000,endpoint=False), np.linspace(r0,r0+1,10000),np.linspace(r0+1,100,8000)))
+    r_list = np.linspace(0,100,100000)
+    p_list = np.array([psi(r,r0,a1,b1,a2,b2,l1,l2,m,mu,ratio) for r in r_list])
+    dr     = r_list[1:] - r_list[:-1]
+
+    #p_list = np.array([psiL(r,a1,b1) for r in r_list])
+    #dr     = r_list[1] - r_list[0]
+    norm   = 2*np.pi*np.sum(0.5*(abs(p_list[:-1])**2 * r_list[:-1] + abs(p_list[1:])**2 * r_list[1:]) * dr)
+    
+    wf = lambda r: (1/np.sqrt(norm)) * psi(r,r0,a1,b1,a2,b2,l1,l2,m,mu,ratio)
+
+    # Find the value rc at which the wavefunction attains its critical points (maximum or minimum)
+    # Numerical derivative:
+    dwfu = lambda r: (wf(r+ddr/2) - wf(r-ddr/2)) / ddr
+    # Use weighted binary search to find zeros of the derivative:
+    if abs(dwfu(0))<1e-8:
+        # If there is a critical point at r=0, the binary search will miss it,
+        # So, it is added manually in that case
+        rc_search = [0.] + weighted_binary_search(dwfu,0.01,100,1,tol=1e-8,strict=True,quiet=True)
+    else:
+        rc_search = weighted_binary_search(dwfu,0,100,2,tol=1e-5,strict=True,quiet=True)
+    # Sometimes the exponentially decaying tail results in a false positive (gradient is close to zero)
+    # In that case, make sure the wavefunction isn't zero at that point also
+    rc = [x for x in rc_search if wf(x)>1e-3]
+    return wf, rc
+
+
+
+## Search algorithm to solve for zeros of a function
+def weighted_binary_search_interval(f,endpoints, tol=1e-14, max_iter=50000,quiet=False):
+    st = time.time()
+    fmin = f(endpoints[0])
+    fmax = f(endpoints[1])
+    if np.sign(fmin) * np.sign(fmax) > 0:
+        if not quiet:
+            print("WARNING: function evaluated at endpoints have the same sign! Terminating.")
+            print(f"{time.time()-st} seconds")
+        return float("nan")
+    else:
+        currentmin = endpoints[0]
+        currentmax = endpoints[1]
+        for i in range(max_iter):
+            #ret  = (abs(fmin)*currentmin + abs(fmax)*currentmax)/(abs(fmin) + abs(fmax))
+            ret = 0.5*(currentmin + currentmax)
+            fret = f(ret)
+            confidence = currentmax - currentmin
+            if confidence < tol:
+                if not quiet:
+                    print(f"Convergence after {i} iterations. Confidence range = {currentmax - currentmin}")
+                    print(f"{time.time()-st} seconds")
+                return 0.5*(currentmax+currentmin)
+            elif np.sign(fmin) * np.sign(fret) <= 0:
+                currentmax = ret
+                fmax = fret
+            else:
+                currentmin = ret
+                fmin = fret
+            if i == max_iter-1:
+                if not quiet:
+                    print(f"WARNING: Max iteration number reached. Confidence range = {currentmax - currentmin}")
+                    print(f"{time.time()-st} seconds")
+                return 0.5*(currentmax+currentmin)
+
+def weighted_binary_search(f,xmin,xmax,resolution,tol=1e-14,max_iter=50000,strict=False,quiet=False):
+    test_array = np.arange(xmin,xmax,resolution)
+    test_signs = np.sign(np.array(list(map(f, test_array))))
+    if strict:
+        intervals  = [[test_array[i], test_array[i+1]] for i in range(len(test_array)-1) if test_signs[i]*test_signs[i+1] < 0]
+    else:
+        intervals  = [[test_array[i], test_array[i+1]] for i in range(len(test_array)-1) if test_signs[i]*test_signs[i+1] <= 0]
+    return [weighted_binary_search_interval(f,interval,tol,max_iter,quiet=quiet) for interval in intervals] 

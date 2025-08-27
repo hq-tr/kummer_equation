@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
 #from itertools import groupby
 from argparse import ArgumentParser
-from lib2Bspec import wronskian as wk2
+from lib2Bspec import weighted_binary_search
 from itertools import product
 import time
 
@@ -25,43 +25,6 @@ def wk(E, m, l1, l2, r0):
     #dwf2 = ((-x2**(abs(mu))+2*abs(mu)*x2**(abs(mu))-1)*sc.hyperu(a2, b2, x2) - x2**(abs(mu))*a2*sc.hyperu(a2+1, b2+1, x2)) * (r0/l2**2)
     dwf2 = ((1/2)*(-1+2*abs(mu)/x2)*sc.hyperu(a2, b2, x2)- a2*sc.hyperu(a2+1, b2+1, x2)) / l2**2
     return wf1*dwf2 - wf2*dwf1
-
-def weighted_binary_search_interval(f,endpoints, tol=1e-14, max_iter=50000):
-	st = time.time()
-	fmin = f(endpoints[0])
-	fmax = f(endpoints[1])
-	if np.sign(fmin) * np.sign(fmax) > 0:
-		print("WARNING: function evaluated at endpoints have the same sign! Terminating.")
-		print(f"{time.time()-st} seconds")
-		return float("nan")
-	else:
-		currentmin = endpoints[0]
-		currentmax = endpoints[1]
-		for i in range(max_iter):
-			#ret  = (abs(fmin)*currentmin + abs(fmax)*currentmax)/(abs(fmin) + abs(fmax))
-			ret = 0.5*(currentmin + currentmax)
-			fret = f(ret)
-			confidence = currentmax - currentmin
-			if confidence < tol:
-				print(f"Convergence after {i} iterations. Confidence range = {currentmax - currentmin}")
-				print(f"{time.time()-st} seconds")
-				return 0.5*(currentmax+currentmin)
-			elif np.sign(fmin) * np.sign(fret) <= 0:
-				currentmax = ret
-				fmax = fret
-			else:
-				currentmin = ret
-				fmin = fret
-			if i == max_iter-1:
-				print(f"WARNING: Max iteration number reached. Confidence range = {currentmax - currentmin}")
-				print(f"{time.time()-st} seconds")
-				return 0.5*(currentmax+currentmin)
-
-def weighted_binary_search(f,xmin,xmax,resolution,tol=1e-14,max_iter=50000):
-	test_array = np.arange(xmin,xmax,resolution)
-	test_signs = np.sign(np.array(list(map(f, test_array))))
-	intervals  = [[test_array[i], test_array[i+1]] for i in range(len(test_array)-1) if test_signs[i]*test_signs[i+1] <= 0]
-	return [weighted_binary_search_interval(f,interval,tol,max_iter) for interval in intervals] 
 
 
 if __name__ == "__main__":

@@ -1,11 +1,10 @@
 import numpy as np
 import os
-from scipy import special
 import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
 #from itertools import groupby
 from argparse import ArgumentParser
-from lib2Bspec import read_spectrum
+from lib2Bspec import read_spectrum,eigenstate
 from itertools import product
 
 ap = ArgumentParser()
@@ -29,30 +28,7 @@ l1 = 1/np.sqrt(abs(B_1))
 r0 = aa.R_0
 
 
-# aliases for confluent hypergeom functions
-hypM = special.hyp1f1
-hypU = special.hyperu
-
 energies = []
-
-# Define the function piece wise (L: r < R_0 , R: r > R_0)
-def psiL(r,a1,b1,l1,m):
-	x1 = r**2/(2*l1**2)
-	return hypM(a1,b1,x1) * x1**(abs(m)/2) * np.exp(-x1/2)
-
-def psiR(r,a2,b2,l2,mu):
-	x2 = r**2/(2*l2**2)
-	return hypU(a2,b2,x2) * x2**(abs(mu)) * np.exp(-x2/2)
-
-# Define the full function with a given ratio. 
-# Ratio is multiplied to the "R" component to ensure the function is continuous.
-def psi(r,a1,b1,a2,b2,l1,l2,m,mu,ratio):
-	if r < aa.R_0:
-		#return 10**(-m) * hypM(a1,b1,r**2/(2*aa.l_1**2)) * r**m * np.exp(-r**2 / (4*aa.l_1**2))
-		return psiL(r,a1,b1,l1,m)
-	else:
-		return psiR(r,a2,b2,l2,mu) * ratio
-		#return 10**(-m) * ratio * hypU(a2,b2,r**2/(2*aa.l_2**2)) * r**abs(mu) * np.exp(-r**2 / (4*aa.l_2**2))
 
 if __name__ == "__main__":
 	fig,ax = plt.subplots(figsize=(8,4.5))
@@ -73,34 +49,11 @@ if __name__ == "__main__":
 			print(f"No {aa.n}-level energy at m = {m}.")
 			continue
 
-		a1 = -E*(l1**2) - m/2 + abs(m/2) + 1/2
-		b1 = 1 + abs(m)
-
-		#mu = m/2 - ((r0**2)/4)*((1/l1**2) - (1/l2**2))
-		mu = m/2 - ((r0**2)/4)*((1/l1**2) - (1/l2**2))
-		a2 = -E*(l2**2) - mu + abs(mu) + 1/2
-		b2 = 1 + 2*abs(mu)
-
-		ddr = 0.000001
-
-		# There are two ratios: ratio between the values and ratio between the first derivatives. 
-		# Ideally, these two ratio must be the same. We calculate both for sanity check.
-		ratio = psiL(aa.R_0,a1,b1,l1,m) / psiR(aa.R_0,a2,b2,l2,mu)
-		ratio2 = (psiL(aa.R_0,a1,b1,l1,m) - psiL(aa.R_0-ddr,a1,b1,l1,m)) / (psiR(aa.R_0+ddr,a2,b2,l2,mu)- psiR(aa.R_0,a2,b2,l2,mu))
-		print(f"ratios: {ratio:.6f}\t{ratio2:.6f}")
-
-		#r_list = np.arange(0,aa.r_max, dr)
-		r_list = np.concatenate((np.linspace(0,r0,10000,endpoint=False), np.linspace(r0,r0+1,10000),np.linspace(r0+1,aa.r_max,8000)))
-		p_list = np.array([psi(r,a1,b1,a2,b2,l1,l2,m,mu,ratio) for r in r_list])
-		dr     = r_list[1:] - r_list[:-1]
-
-		#p_list = np.array([psiL(r,a1,b1) for r in r_list])
-
-		# roughly normalize the wavefunction using rectangle rule
-		#dr     = r_list[1] - r_list[0]
-		norm   = 2*np.pi*np.sum(0.5*(abs(p_list[:-1])**2 * r_list[:-1] + abs(p_list[1:])**2 * r_list[1:]) * dr)
-		print(f"norm={norm}")
-		p_list /= np.sqrt(norm)
+		wf,rc = eigenstate(E,aa.R_0,aa.B_0,B_1,m)
+		print("** Critical points = ")
+		print(rc)
+		r_list = np.linspace(0,aa.r_max,200)
+		p_list = np.array([wf(r) for r in r_list])
 
 		plt.plot(r_list,p_list,label=f"m = {m}, E = {E:.5f}")
 
