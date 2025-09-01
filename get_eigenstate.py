@@ -32,7 +32,7 @@ energies = []
 
 if __name__ == "__main__":
 	if not os.path.isdir("plots"):
-		mkdir("plots")
+		os.mkdir("plots")
 
 	fig,ax = plt.subplots(figsize=(8,4.5))
 	ax.tick_params(axis="y",direction="in", left="off",labelleft="on")

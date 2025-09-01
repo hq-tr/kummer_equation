@@ -88,7 +88,7 @@ if __name__ == "__main__":
 
 
 	if not os.path.isdir("energies"):
-		mkdir("energies")
+		os.mkdir("energies")
 	for flux, R_0 in product(flux_range,aa.R_0):
 		st = time.time()
 		if not aa.quiet:
