@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
 from itertools import groupby
 import time
+from functools import partial
 
 
 # The continuity condition is described by the Wronskian.
@@ -162,7 +163,7 @@ def read_spectrum(B0,flux,R0):
         with open(f"energies/eigen_B_0_{B0}_flux_{flux:.4f}_R0_{R0:.4f}.dat") as f:
             data = [list(map(float,x.split())) for x in f.readlines()]
             E = np.array([x[0] for x in data])
-            m = np.array([x[1] for x in data])
+            m = np.array([int(x[1]) for x in data])
     except FileNotFoundError:
         print(f"Spectrum data not found for B0={B0}, flux={flux:.4f}, R0={R0:.4f}")
         E = []
@@ -176,25 +177,25 @@ hypM = sc.hyp1f1
 hypU = sc.hyperu
 
 # Define the function piece wise (L: r < R_0 , R: r > R_0)
-def psiL(r,a1,b1,l1,m):
+def psiL(a1,b1,l1,m,r):
     x1 = r**2/(2*l1**2)
     return hypM(a1,b1,x1) * x1**(abs(m)/2) * np.exp(-x1/2)
 
-def psiR(r,a2,b2,l2,mu):
+def psiR(a2,b2,l2,mu,r):
     x2 = r**2/(2*l2**2)
     return hypU(a2,b2,x2) * x2**(abs(mu)) * np.exp(-x2/2)
 
 # Define the full function with a given ratio. 
 # Ratio is multiplied to the "R" component to ensure the function is continuous.
 def psi(r,r0,a1,b1,a2,b2,l1,l2,m,mu,ratio):
-    if r < 0: 
-        return psiL(0,a1,b1,l1,m)
-    elif r < r0:
-        #return 10**(-m) * hypM(a1,b1,r**2/(2*aa.l_1**2)) * r**m * np.exp(-r**2 / (4*aa.l_1**2))
-        return psiL(r,a1,b1,l1,m)
-    else:
-        return psiR(r,a2,b2,l2,mu) * ratio
-        #return 10**(-m) * ratio * hypU(a2,b2,r**2/(2*aa.l_2**2)) * r**abs(mu) * np.exp(-r**2 / (4*aa.l_2**2))
+    return np.piecewise(r,[r<0, np.logical_and(r>=0,r<r0), r>=r0], [psiL(a1,b1,l1,m,0),partial(psiL,a1,b1,l1,m),lambda x: psiR(a2,b2,l2,mu,x) * ratio])
+    # if r < 0: 
+    #     return psiL(a1,b1,l1,m,0)
+    # elif r < r0:
+    #     return psiL(a1,b1,l1,m,r)
+    # else:
+    #     return psiR(a2,b2,l2,mu,r) * ratio
+
 
 # Generate a wavefunction (in r) given an energy E
 def eigenstate(E,r0,B0,B1,m):
@@ -213,16 +214,17 @@ def eigenstate(E,r0,B0,B1,m):
     ddr = 0.0000000001 
     # There are two ratios: ratio between the values and ratio between the first derivatives. 
     # Ideally, these two ratio must be the same. We calculate both for sanity check.
-    ratio = psiL(r0,a1,b1,l1,m) / psiR(r0,a2,b2,l2,mu)
-    ratio2 = (psiL(r0,a1,b1,l1,m) - psiL(r0-ddr,a1,b1,l1,m)) / (psiR(r0+ddr,a2,b2,l2,mu)- psiR(r0,a2,b2,l2,mu))
+    ratio = psiL(a1,b1,l1,m,r0) / psiR(a2,b2,l2,mu,r0)
+    ratio2 = (psiL(a1,b1,l1,m,r0) - psiL(a1,b1,l1,m,r0-ddr)) / (psiR(a2,b2,l2,mu,r0+ddr)- psiR(a2,b2,l2,mu,r0))
     if abs(ratio-ratio2)>0.01:
-        print(f"WARNING: the function may not be both continuous and differentiable at r={r0}")
+        print(f"WARNING: (m={m}) the function may not be both continuous and differentiable at r={r0}")
         print(f"Check ratio:\t{ratio:.6f}\t{ratio2:.6f}")
 
     # normalize the wavefunction using rectangle rule
     #r_list = np.concatenate((np.linspace(0,r0,10000,endpoint=False), np.linspace(r0,r0+1,10000),np.linspace(r0+1,100,8000)))
     r_list = np.linspace(0,100,100000)
-    p_list = np.array([psi(r,r0,a1,b1,a2,b2,l1,l2,m,mu,ratio) for r in r_list])
+    #p_list = np.array([psi(r,r0,a1,b1,a2,b2,l1,l2,m,mu,ratio) for r in r_list])
+    p_list = psi(r_list,r0,a1,b1,a2,b2,l1,l2,m,mu,ratio)
     dr     = r_list[1:] - r_list[:-1]
 
     #p_list = np.array([psiL(r,a1,b1) for r in r_list])
