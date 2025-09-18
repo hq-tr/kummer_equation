@@ -4,31 +4,12 @@ import matplotlib.pyplot as plt
 from scipy.optimize import fsolve
 #from itertools import groupby
 from argparse import ArgumentParser
-from lib2Bspec import weighted_binary_search
+from lib2Bspec import weighted_binary_search, wk
 from itertools import product,repeat
 import time
 
 import os
 from multiprocessing import Pool
-
-def wk(E, m, l1, l2, r0):
-    x1 = r0**2/(2*l1**2)
-    x2 = r0**2/(2*l2**2)
-    
-    a1 = -E*(l1**2) - m/2 + abs(m/2) + 1/2
-    b1 = 1 + abs(m)
-    wf1  = sc.hyp1f1(a1, b1, x1) #* x1**(abs(m)/2)
-    #dwf1 = ((-x1**(abs(m)/2)+abs(m)*x1**(abs(m)/2-1))*sc.hyp1f1(a1, b1, x1) + x1**(abs(m)/2)*(a1/b1)*sc.hyp1f1(a1+1, b1+1, x1)) * (r0/l1**2)
-    dwf1 = ((1/2)*(-1+abs(m)/x1)*sc.hyp1f1(a1, b1, x1) +(1/b1)*a1*sc.hyp1f1(a1+1, b1+1, x1)) / l1**2
-    
-    mu = m/2 - ((r0**2)/4)*((1/l1**2) - (1/l2**2))
-    a2 = -E*(l2**2) - mu + abs(mu) + 1/2
-    b2 = 1 + 2*abs(mu)
-    wf2  = sc.hyperu(a2, b2, x2) #* x2**(abs(mu))
-    #dwf2 = ((-x2**(abs(mu))+2*abs(mu)*x2**(abs(mu))-1)*sc.hyperu(a2, b2, x2) - x2**(abs(mu))*a2*sc.hyperu(a2+1, b2+1, x2)) * (r0/l2**2)
-    dwf2 = ((1/2)*(-1+2*abs(mu)/x2)*sc.hyperu(a2, b2, x2)- a2*sc.hyperu(a2+1, b2+1, x2)) / l2**2
-    return wf1*dwf2 - wf2*dwf1
-
 
 def get_energies(params): # params is (m,flux,l1,l2,r0)
 	# NOTE: This funciton returns a string object
@@ -36,8 +17,8 @@ def get_energies(params): # params is (m,flux,l1,l2,r0)
 
 	m    = params[0]
 	flux = params[1]
-	l1   = params[2]
-	l2   = params[3]
+	B1   = params[2]
+	B2   = params[3]
 	r0   = params[4]
 	
 	Emin = 0.0
@@ -48,11 +29,11 @@ def get_energies(params): # params is (m,flux,l1,l2,r0)
 	if not aa.quiet:
 		print(f"m={m} -----------------")
 
-	f = lambda E: wk(E,m,l1,l2,r0)
+	f = lambda E: wk(E,m,B1,B2,r0)
 	E = weighted_binary_search(f,Emin,Emax,delE,tol=aa.tolerance,max_iter=aa.max_iteration,quiet=aa.quiet)
 
 	if len(E)>0:
-		return "\n".join(f"{En}\t{m}" for En in E)
+		return "\n".join(f"{En}\t{m}" for En in E) + "\n"
 	else:
 		return ""
 
@@ -93,18 +74,21 @@ if __name__ == "__main__":
 		st = time.time()
 		if not aa.quiet:
 			print(f"Working on flux = {flux}, R_0 = {R_0}")
-		l_2 = 1/np.sqrt(aa.B_0)
-		l_1 = 1/np.sqrt(abs(aa.B_0 + flux / (np.pi * R_0**2)))
+
+		B_2 = aa.B_0
+		B_1 = aa.B_0 + flux / (np.pi * R_0**2)
+		#l_2 = 1/np.sqrt(aa.B_0)
+		#l_1 = 1/np.sqrt(abs(aa.B_0 + flux / (np.pi * R_0**2)))
 
 		El = []
 		ml = []
 
 
 		with Pool(num_cores_used) as p:
-			output = "\n".join(p.map(get_energies,zip(range(aa.m_min,aa.m_max+1),repeat(flux),repeat(l_1),repeat(l_2),repeat(R_0))))
+			output = "".join(p.map(get_energies,zip(range(aa.m_min,aa.m_max+1),repeat(flux),repeat(B_1),repeat(B_2),repeat(R_0))))
 
 		with open(f"energies/eigen_B_0_{aa.B_0}_flux_{flux:.4f}_R0_{R_0:.4f}.dat", "w+") as f:
-			f.write(output)
+			f.write(output[:-1])
 			
 
 		print(f"_______ DONE flux = {flux:.5f}, R_0 = {R_0}:\t{time.time()-st:.5f} seconds. ________")

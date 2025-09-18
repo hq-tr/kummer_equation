@@ -23,9 +23,33 @@ from itertools import groupby
 import time
 from functools import partial
 
+# The continuity condition is described by the Wronskian.
+def wk(E, m, B1, B2, r0):
+    l1 = 1/np.sqrt(abs(B1))
+    l2 = 1/np.sqrt(abs(B2))
+
+    x1 = r0**2/(2*l1**2)
+    x2 = r0**2/(2*l2**2)
+    
+    a1 = -E/B1 - m/2 + abs(m/2) + 1/2
+    b1 = 1 + abs(m)
+    wf1  = sc.hyp1f1(a1, b1, x1) #* x1**(abs(m)/2)
+    #dwf1 = ((-x1**(abs(m)/2)+abs(m)*x1**(abs(m)/2-1))*sc.hyp1f1(a1, b1, x1) + x1**(abs(m)/2)*(a1/b1)*sc.hyp1f1(a1+1, b1+1, x1)) * (r0/l1**2)
+    dwf1 = ((1/2)*(-1+abs(m)/x1)*sc.hyp1f1(a1, b1, x1) +(1/b1)*a1*sc.hyp1f1(a1+1, b1+1, x1)) / l1**2
+    
+    #mu = m/2 - ((r0**2)/4)*((1/l1**2) - (1/l2**2))
+    mu = m/2 - (B1-B2)*r0**2/4
+    a2 = -E/B2 - mu + abs(mu) + 1/2
+    b2 = 1 + 2*abs(mu)
+    wf2  = sc.hyperu(a2, b2, x2) #* x2**(abs(mu))
+    #dwf2 = ((-x2**(abs(mu))+2*abs(mu)*x2**(abs(mu))-1)*sc.hyperu(a2, b2, x2) - x2**(abs(mu))*a2*sc.hyperu(a2+1, b2+1, x2)) * (r0/l2**2)
+    dwf2 = ((1/2)*(-1+2*abs(mu)/x2)*sc.hyperu(a2, b2, x2)- a2*sc.hyperu(a2+1, b2+1, x2)) / l2**2
+    return wf1*dwf2 - wf2*dwf1
 
 # The continuity condition is described by the Wronskian.
-def wk(E, m, l1, l2, r0):
+# Below is the old version that uses l1 and l2 instead of B1 and B2.
+# This loses the information about the sign of B1 and B2
+def wk2(E, m, l1, l2, r0):
     x1 = r0**2/(2*l1**2)
     x2 = r0**2/(2*l2**2)
     
@@ -179,11 +203,25 @@ hypU = sc.hyperu
 # Define the function piece wise (L: r < R_0 , R: r > R_0)
 def psiL(a1,b1,l1,m,r):
     x1 = r**2/(2*l1**2)
-    return hypM(a1,b1,x1) * x1**(abs(m)/2) * np.exp(-x1/2)
+    if a1 >=0:
+        return hypM(a1,b1,x1) * x1**(abs(m)/2) * np.exp(-x1/2)
+    else:
+        if abs(a1-round(a1)) > 1e-6:
+            return hypM(a1,b1,x1) * x1**(abs(m)/2) * np.exp(-x1/2)
+        else:
+            #print("NOTE: Replacing the confluence hypergeometric M function with an associate Laguerre.")
+            n = -round(a1)
+            return sc.assoc_laguerre(x1,n,b1-1) * x1**(abs(m)/2) * np.exp(-x1/2)
+    
 
 def psiR(a2,b2,l2,mu,r):
     x2 = r**2/(2*l2**2)
-    return hypU(a2,b2,x2) * x2**(abs(mu)) * np.exp(-x2/2)
+    if a2 >=0 or abs(a2-round(a2)) > 1e-6:
+        return hypU(a2,b2,x2) * x2**(abs(mu)) * np.exp(-x2/2)
+    else:
+        #print("NOTE: Replacing the confluence hypergeometric U function with an associate Laguerre.")
+        n = -round(a2)
+        return (-1)**n*sc.assoc_laguerre(x2,n,b2-1) * x2**(abs(mu)) * np.exp(-x2/2)
 
 # Define the full function with a given ratio. 
 # Ratio is multiplied to the "R" component to ensure the function is continuous.
@@ -203,13 +241,16 @@ def eigenstate(E,r0,B0,B1,m):
     l2 = 1/np.sqrt(abs(B0))
     l1 = 1/np.sqrt(abs(B1))
 
-    a1 = -E*(l1**2) - m/2 + abs(m/2) + 1/2
+    a1 = -E/B1 - m/2 + abs(m/2) + 1/2
     b1 = 1 + abs(m)
 
-    mu = m/2 - ((r0**2)/4)*((1/l1**2) - (1/l2**2))
+    mu = m/2 - (B1-B0)*r0**2/4
+    #mu = m/2 - ((r0**2)/4)*((1/l1**2) - (1/l2**2))
+    print(f"m = {m}\t2 mu = {2*mu}")
     a2 = -E*(l2**2) - mu + abs(mu) + 1/2
     b2 = 1 + 2*abs(mu)
 
+    print(f"a1 = {a1}\ta2 = {a2}")
     # Calculate the ratio at r0:
     ddr = 0.0000000001 
     # There are two ratios: ratio between the values and ratio between the first derivatives. 
@@ -221,8 +262,8 @@ def eigenstate(E,r0,B0,B1,m):
         print(f"Check ratio:\t{ratio:.6f}\t{ratio2:.6f}")
 
     # normalize the wavefunction using rectangle rule
-    #r_list = np.concatenate((np.linspace(0,r0,10000,endpoint=False), np.linspace(r0,r0+1,10000),np.linspace(r0+1,100,8000)))
-    r_list = np.linspace(0,100,100000)
+    r_list = np.concatenate((np.linspace(0,r0+0.5,1000,endpoint=False), np.linspace(r0+0.5,100,10000)))
+    #r_list = np.linspace(0,100,20000)
     #p_list = np.array([psi(r,r0,a1,b1,a2,b2,l1,l2,m,mu,ratio) for r in r_list])
     p_list = psi(r_list,r0,a1,b1,a2,b2,l1,l2,m,mu,ratio)
     dr     = r_list[1:] - r_list[:-1]
